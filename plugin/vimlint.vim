@@ -6,7 +6,6 @@
 " Author:      Barry Arthur <barry.arthur at gmail dot com>
 " Last Change: 30 June, 2010
 "
-" TODO: Add documentation :)
 " See vimlint.txt for help.  This can be accessed by doing:
 "
 " :helptags ~/.vim/doc
@@ -14,7 +13,7 @@
 "
 " Licensed under the same terms as Vim itself.
 " ============================================================================
-let s:VimLint_version = '0.0.1'  " alpha, unreleased
+let s:VimLint_version = '0.0.2'  " alpha, unreleased
 
 " allow line continuation
 let s:old_cpo = &cpo
@@ -41,14 +40,6 @@ set cpo&vim
 "     remove mswin.vim
 "     $TERM <> &term is mostly bad.
 "
-"     TODO:
-"     Hueristics to determine if 'behave mswin' is enabled:
-"     'selectmode'   "mouse,key"
-"     'mousemodel'   "popup"
-"     'keymodel'     "startsel,stopsel"
-"     'selection'    "exclusive"
-"     map <C-F4>     noremap <C-F4> <C-W>c
-"
 
 " Essential Options: {{{1
 " TODO: trim following options list to just the essentials
@@ -58,7 +49,7 @@ let indent_reason = 'Remove all indent options from your .vimrc (except autoinde
 let s:chk_opt = {
       \  'cindent' : {
       \    'reason' : indent_reason,
-      \    'fail-expr' : ['(&cindent == 1) && (&filetype !~ "c\\(++\\)\\?")']
+      \    'fail-expr' : ['&cindent == 1']
       \  },
       \  'compatible' : {
       \    'reason' : "Use Vim, not vi.",
@@ -109,8 +100,8 @@ let s:chk_opt = {
       \    'fail-expr' : ['&smartindent == 1']
       \  },
       \  'tabstop' : {
-      \    'reason' : "Don't ever change tabstop to anything but 8.",
-      \    'fail-expr' : ['&tabstop != 8']
+      \    'reason' : "Don't change 'tabstop' when using 'expandtab'.",
+      \    'fail-expr' : ['(&tabstop != 8) && (&expandtab == 1)']
       \  },
       \}
 
@@ -262,7 +253,7 @@ function! s:VL_CollectData()
 endfunction
 
 function! s:VL_RunReport()
-  echo "= Vim Lint ="
+  echo "= Vim Lint v" . s:VimLint_version . " ="
   echo "\nThis is a summary of your current Vim configuration, with suggestions to correct bad or dangerous options.\n"
   echo "warnings are shown in red on white background (usually with ! at the start of the line)."
   echo "errors are shown in white on red background (usually with !! at the start of the line)."
@@ -273,16 +264,21 @@ endfunction
 
 " Public Interface: {{{1
 function! VimLint()
-  let tmpfile = tempname()
+  let vimlintreport = tempname()
 
-  exe "redir > " . tmpfile
+  new  " use a new window / buffer so that filetype is clear
+  exe "redir > " . vimlintreport
   silent call s:VL_RunReport()
   redir END
 
-  exe "edit " . tmpfile
+  exe "edit " . vimlintreport
   silent set filetype=vimlint
+  " nicer to see the report in a full window if we can
+  if &hidden == 1
+    only
+  endif
 
-  echo "Vim Lint Report saved in " . tmpfile
+  echo "Vim Lint Report saved in " . vimlintreport
 endfunction
 
 command! -nargs=0 VimLint call VimLint()
