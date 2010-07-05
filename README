@@ -1,0 +1,27 @@
+= VimLint: A correctness and sanity checker of vim configuration.
+
+VimLint is a tool to check your Vim configuration for poorly set options with
+reasons why they're considered bad and suggestions on how to improve them.
+
+== Quick Start
+
+Once installed, run Vim Lint by doing:
+
+  :VimLint
+
+This will generate and open a report of your current Vim configuration.
+
+== Resources
+
+=== Website:
+
+http://github.com/dahu/VimLint
+
+=== Bug Tracker / Wiki:
+
+http://wiki.github.com/dahu/VimLint/
+
+=== Source Code:
+
+http://github.com/dahu/VimLint
+
