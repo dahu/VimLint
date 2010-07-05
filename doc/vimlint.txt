@@ -1,0 +1,75 @@
+*vimlint.txt*  Plugin for checking your Vim configuration for correctness.
+
+Author:  Barry Arthur <barry.arthur at gmail dot com>     *vimlint-author*
+License: Same terms as Vim itself (see |license|)
+
+This plugin is only available if 'compatible' is not set.
+
+INTRODUCTION                                           *VimLint* *vimlint*
+
+This plugin looks at your current Vim configuration and warns about
+poorly set options that cause Vim to behave unexpectedly, incorrectly
+or in a non-standard manner. Reasons are given for why something is
+considered to be wrong, and suggestions are given as to how to rectify
+the situation.
+
+To run Vim Lint, use the command:
+>
+	:VimLint
+<
+
+This will create a |vimlint-report| in your temp directory and open it
+in your current vim session for you to read.
+
+VIM LINT REPORT                                           *vimlint-report*
+
+The report is divided into the following sections:
+
+- Version Information	Showing what version of Vim you are using and
+			what features were enabled (+feature) or
+			disabled (-feature) at compile time. If your
+			Vim is missing an essential feature then you
+			should upgrade to a more complete version if
+			possible. See |:version| for more details.
+
+- Environment Variables	Showing the value of several important
+  			environment variables that Vim uses.
+
+- Essential Vim Options	Showing the most important Vim options. These
+			options affect security, vi compatibility,
+			standard Vim behaviour and interoperability.
+			See |options.txt| and the |:options| command
+			for more details.
+
+- Loaded Scripts	Showing all of the script files from builtins
+			and plugins that were loaded in this Vim
+			session. They are listed in the order they
+			were loaded. See |:scriptnames| for more
+			details.
+
+- All Vim Options	Showing all of Vim's options with erroneous
+  			and dubious options highlighted.
+
+- Vim Termcap Options	Showing Vim's current terminal capability
+			settings as read from terminfo when Vim was
+			started. Though not helpful to beginners, this
+			information might be useful to an expert
+			debugging a terminal problem.
+
+ISSUES                                                    *vimlint-issues*
+
+More detailed explanation of features and options to explain why
+something is bad. E.g. The vim help entry for |+X11| doesn't explain
+that having it disabled will prevent cut/copy/paste between Vim and
+other applications.
+
+Several more heuristics are yet to be implemented for detecting
+things, like 'behave mswin' being set.
+
+The Scripts and All Settings options lists do not have a leading '!'
+or '!!' for warnings or failures yet.
+
+More entries need to be added to various Vim Options and Environment
+Variables to make these checks more complete.
+
+ vim:tw=78:ts=8:ft=help:norl:
