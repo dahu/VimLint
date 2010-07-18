@@ -12,8 +12,8 @@ hi def vimlintCompilerString term=bold ctermfg=6 guifg=DarkCyan
 hi def vimlintOption term=bold ctermfg=5 guifg=Purple
 hi def vimlintError term=standout ctermfg=15 ctermbg=1 guifg=White guibg=Red
 hi def vimlintWarning term=standout ctermfg=1 guifg=Red
+hi def vimlintFeatures term=none cterm=bold ctermfg=0 guifg=LightGray
 hi def vimlintPresentFeature term=bold ctermfg=2 gui=bold guifg=SeaGreen
-hi def vimlintMissingFeature term=standout ctermfg=0 ctermbg=11 guifg=Black guibg=Yellow
 hi def vimlintTitle term=none cterm=bold ctermfg=4 guifg=Blue
 hi def vimlintComment term=none cterm=bold ctermfg=0 guifg=SlateGray
 
@@ -23,15 +23,20 @@ syn match vimlintErrorWord      '^errors'
 syn match vimlintWarningWord    '^warnings'
 syn match vimlintError          '^!! \@='
 syn match vimlintWarning        '^! \@='
-syn match vimlintFeatures       '^[-+].*$' contains=vimlintMissingFeature,vimlintPresentFeature
-syn match vimlintMissingFeature contained '-\w\+'
+syn match vimlintFeatures       '^[-+].*' contains=vimlintPresentFeature,vimlintMissingFeatures
 syn match vimlintPresentFeature contained '+\w\+'
 syn match vimlintCompilerString '^Compilation:.*$'
 syn match vimlintCompilerString '^Linking:.*$'
 syn match vimlintH1             '^= .* =$'
 syn match vimlintH2             '^== .* ==$'
 syn match vimlintH3             '^--- .* ---$'
-syn match vimlintComment        '		.*$'
+syn match vimlintComment        '		.*'
+
+syn match vimlintMissingFeatures contained '-\<autocmd\>\|-\<cindent\>\|-\<clipboard\>\|-\<cmdline_compl\>\|-\<cmdline_hist\>\|-\<cmdline_info\>\|-\<comments\>\|-\<diff\>\|-\<digraphs\>\|-\<eval\>\|-\<ex_extra\>\|-\<extra_search\>\|-\<file_in_path\>\|-\<find_in_path\>\|-\<folding\>\|-\<iconv\>\|-\<insert_expand\>\|-\<jumplist\>\|-\<keymap\>\|-\<listcmds\>\|-\<localmap\>\|-\<modify_fname\>\|-\<mouse\>\|-\<multi_byte\>\|-\<multi_lang\>\|-\<path_extra\>\|-\<quickfix\>\|-\<scrollbind\>\|-\<statusline\>\|-\<syntax\>\|-\<tag_binary\>\|-\<textobjects\>\|-\<title\>\|-\<user_commands\>\|-\<vertsplit\>\|-\<visual\>\|-\<visualextra\>'
+
+if has('unix') || has('macunix')
+  syn match vimlintMissingFeatures contained '-\<terminfo\>\|-\<termresponse\>\|-\<mouse_xterm\>\|-\<X11\>'
+endif
 
 syn region vimlintOptionRegion matchgroup=vimlintH2 start=/^== Essential Options ==$/ end=/^== Scripts ==$/ skipwhite contains=vimlintOption,vimlintComment,vimlintError,vimlintWarning
 syn region vimlintOptionRegion matchgroup=vimlintH2 start=/^--- Options ---$/ end=/^== Termcap Settings ==$/ skipwhite contains=vimlintOption,vimlintComment,vimlintEvilOption,vimlintWarningOption
@@ -68,6 +73,7 @@ hi def link vimlintEvilScript            vimlintError
 hi def link vimlintWarningOption         vimlintWarning
 hi def link vimlintErrorWord             vimlintError
 hi def link vimlintWarningWord           vimlintWarning
+hi def link vimlintMissingFeatures       vimlintWarning
 hi def link vimlintH1                    vimlintTitle
 hi def link vimlintH2                    vimlintTitle
 hi def link vimlintH3                    vimlintTitle
