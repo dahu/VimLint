@@ -4,7 +4,7 @@
 "              loaded scripts for conflicts, omissions and ill-advised
 "              configurations.
 " Author:      Barry Arthur <barry.arthur at gmail dot com>
-" Last Change: 18 July, 2010
+" Last Change: 20 July, 2010
 " Website:     http://github.com/dahu/VimLint
 "
 " See vimlint.txt for help.  This can be accessed by doing:
@@ -14,9 +14,14 @@
 "
 " Licensed under the same terms as Vim itself.
 " ============================================================================
-let s:VimLint_version = '0.0.3'  " alpha, unreleased
+let s:VimLint_version = '0.0.4'  " alpha, unreleased
 
 " History:{{{1
+" v.0.0.4 changes:
+" * check &runtimepath for sane entries
+" * show the current   :filetype   settings in the vimlint report
+" * Tried to DRY up the way temporary redirections are done.
+"
 " v.0.0.3 changes:
 " * environment variables check list now allows multiple {:reason, :fail_expr}
 "   sets
@@ -35,6 +40,27 @@ let s:VimLint_version = '0.0.3'  " alpha, unreleased
 " v0.0.1:
 " * initial release
 
+" TODO / Issues:{{{1
+"
+" [Features]
+" * dump :scriptnames to a tempfile and parse it for 'bad scripts', adding !!
+"   and ! as appropriate.
+" * add lots more help in the doc/vimlint.txt file explaining *why* these
+"   recommendations are made.
+" * add tags to easily jump from the report to the help entries.
+" * should autocmds be dumped?
+"
+" [Script Robustness]
+" * learn what needs protecting:
+" ** if not running under Vim 7.
+" ** given the possibility of missing features - should I wrap has('feature')
+"    checks around everything?
+"
+" [Code Style]
+" * see the various TODO's throughout
+" * With respect to DRYing the temporary redirections, I possibly don't have
+"   the edges quite right yet. What goes on what side of the line?
+
 " allow line continuation
 let s:old_cpo = &cpo
 set cpo&vim
@@ -43,9 +69,11 @@ set cpo&vim
 " Repeatedly used error messages (used by the s:E() function below)
 let s:vl_error_messages = {
       \ 'critical_error'  : "Something must be very wrong with your Vim installation.",
+      \ 'help'            : "	|VL-%s|",
       \ 'indent_reason'   : "Use 'filetype indent on' instead, for smart per-filetpe indenting.",
       \ 'env_var_missing' : "You have an invalid %s environment variable.",
-      \ 'env_var_invalid' : "Your %s environment variable points to an invalid directory."
+      \ 'env_var_invalid' : "Your %s environment variable points to an invalid directory.",
+      \ 'after_dir_missing' : "%s/after needs to be added to your runtimepath because it contains %s and a corresponding '/after' directory exists on disk."
       \}
 
 " Error Message Expander
@@ -123,6 +151,7 @@ let s:chk_opt = {
 " TODO: either decide to keep the consistent data structure (allowing the
 " hideous [{}]), or change the VL_CheckEnvironmentVars() function to allow
 " single entry {...} or multiple entry [{..},{...}] variants.
+"
 " NOTE: It seems that Vim defaults the $VIM and $VIMRUNTIME env vars if
 " they're empty, so that test is probably moot.
 let s:chk_env_vars = {
@@ -168,6 +197,26 @@ endfunction
 function! s:VL_Expand(var_type, var_name)
   exe "let val = " . a:var_type . a:var_name
   return val
+endfunction
+
+" helper wrapper for temporarily redirecting output to a tempfile for
+" capturing info.
+" NOTE: The argument, a:processing, is a function containing ex commands for
+" post-processing the output of a Vim command.
+" Example: call s:VL_RedirectWith('s:VL_ProcessAllVimOptions()')
+" NOTE: This re-sets redirection and resets it back to the Vim Report afterwards.
+function! s:VL_RedirectWith(command, processing)
+  let tempfilename = tempname()
+  exe "redir > " . tempfilename
+  "silent set all
+  exe a:command
+  redir END
+  exe "edit " . tempfilename
+  exe "call " . a:processing
+  "write
+  "source %
+  "bdelete
+  exe "redir >> " . s:vimlintreport
 endfunction
 
 function! s:VL_CheckVimVersion()
@@ -257,23 +306,53 @@ function! s:VL_CheckVimrc()
   endif
 endfunction
 
-" Not in v0.0.3 - left out due to platform differences
 " checks for sane entries in &runtimepath
-function! VL_CheckVimRuntimePath()
-  let essential_dirs = {
-    \ $VIM : 0,
-    \ $VIM . "/after" : 0,
-    \ $VIMRUNTIME : 0}
+function! s:VL_CheckVimRuntimePath()
+  " TODO: I have the feeling that DRYing the next two checks would be more
+  " hassle than it's worth, and more verbose than this simple but ugly way.
+  if finddir($VIM, &rtp) == ''
+    echo "!! $VIM is not in your runtimepath! " . s:E('critical_error')
+  endif
+  if finddir($VIMRUNTIME, &rtp) == ''
+    echo "!! $VIMRUNTIME is not in your runtimepath! " . s:E('critical_error')
+  endif
+  let started_afters = 0
   for v_dir in split(&runtimepath, '\\\@<!,')
-    echo v_dir
-    if has_key(essential_dirs, v_dir)
-      let essential_dirs[v_dir] = 1
+    if v_dir =~# '/after$'
+      let started_afters = 1
+    else
+      if started_afters
+        echo "!! Must not have normal directories following '/after' directories in runtimepath: " . v_dir
+      endif
+      if isdirectory(v_dir . "/after") && finddir(v_dir . "/after", &rtp) == ''
+        " TODO: this seems clumsy... What is the alternative? Is there a way
+        " for printf() to repeat the final argument if not enough are supplied...?
+        echo "!! " . s:E('after_dir_missing', v_dir, v_dir)
+      endif
     endif
   endfor
-  "for v_dir in filter(keys(essential_dirs), 'v:val == 0')
-  for v_dir in keys(essential_dirs)
-    echo v_dir . " = " . essential_dirs[v_dir]
-  endfor
+endfunction
+
+" set of ex commands to massage the ':filetype' output
+function! s:VL_ProcessFiletypeSettings()
+  let g:VL_filetype_has_off = 0
+  normal "2dd"
+  let g:VL_filetype_line = getline('.')
+  if g:VL_filetype_line =~? 'off'
+    let g:VL_filetype_has_off = 1
+  endif
+endfunction
+
+function! s:VL_CheckFiletypeSettings()
+  echo "\n== Filetype Settings ==\n"
+  let status = '   '
+  let help = ''
+  call s:VL_RedirectWith('filetype', 's:VL_ProcessFiletypeSettings()')
+  if g:VL_filetype_has_off
+    let status = '!! '
+    let help = s:E('help', 'filetype')
+  endif
+  echo status . g:VL_filetype_line . help
 endfunction
 
 " checks important vim options
@@ -290,7 +369,7 @@ function! s:VL_CheckEssentialOptions()
     end
     let status = s:VL_EvaluateExpressions(v_inf)
     let reason = s:VL_FailReason(status, v_inf['reason'])
-    exe "echo \"" . status . "'" . s_opt . e_val . reason . "\""
+    exe "echo \"" . status . s_opt . e_val . reason . "\""
   endfor
 endfunction
 
@@ -301,42 +380,33 @@ function! s:VL_CheckScripts()
   endif
 endfunction
 
-" parse the output of 
-" NOTE: This re-sets redirection and resets it back to the Vim Report afterwards.
-function! s:VL_GetAllVimOptions()
-  let vimlintoptions = tempname()
-  exe "redir > " . vimlintoptions
-  silent set all
-  redir END
-  exe "edit " . vimlintoptions
+" set of ex commands to convert the ':set all' output into an array of option
+" names
+" TODO: I fear there has to be a better way to do all this...
+function! s:VL_ProcessAllVimOptions()
   1
-  silent s/\_.\{-}\_^--- Options ---$//
-  silent .,/^  backspace/s/ \+/\r/g
-  silent .,$s/^ \+//
-  silent g/^\s*$/d
-  silent %s/^no//
-  silent %s/=.*/',/
-  silent %sort
-  silent %s/\([^,]\)$/\1',/
-  silent %s/^/  \\  '/
+  s/\_.\{-}\_^--- Options ---$//
+  .,/^  backspace/s/ \+/\r/g
+  .,$s/^ \+//
+  g/^\s*$/d
+  %s/^no//
+  %s/=.*/',/
+  %sort
+  %s/\([^,]\)$/\1',/
+  %s/^/  \\  '/
   $
-  silent s/,/]/
+  s/,/]/
   1
   normal Olet g:VL_all_options = [
   write
   source %
   bdelete
-  exe "redir >> " . s:vimlintreport
 endfunction
 
 function! s:VL_CheckAllOptions()
   echo "\n== All Settings ==\n"
   echo "--- Options ---"
-  " Old v0.0.2 way was just to dump the output of :set all
-  "silent set all
-  " New v0.0.3 way is to collect those options and then iterate through them
-  " one at a time calling :verbose set <option>
-  call s:VL_GetAllVimOptions()
+  call s:VL_RedirectWith('set all', 's:VL_ProcessAllVimOptions()')
   for v_opt in g:VL_all_options
     silent exe "verbose set " . v_opt . "?"
   endfor
@@ -351,7 +421,8 @@ function! s:VL_CollectData()
   call s:VL_CheckVimVersion()
   call s:VL_CheckEnvironmentVars()
   call s:VL_CheckVimrc()
-  "call s:VL_CheckVimRuntimePath()
+  call s:VL_CheckVimRuntimePath()
+  call s:VL_CheckFiletypeSettings()
   call s:VL_CheckEssentialOptions()
   call s:VL_CheckScripts()
   call s:VL_CheckAllOptions()
@@ -393,4 +464,9 @@ command! -nargs=0 VimLint call VimLint()
 "reset &cpo back to users setting
 let &cpo = s:old_cpo
 
+" Credits:{{{1
+"
+" Thanks to godlygeek, jamessan and spiiph for contributing ideas,
+" suggestions, algorithms and corrections.
+"
 " vim: set sw=2 sts=2 et fdm=marker:
