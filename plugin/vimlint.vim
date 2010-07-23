@@ -4,7 +4,7 @@
 "              loaded scripts for conflicts, omissions and ill-advised
 "              configurations.
 " Author:      Barry Arthur <barry.arthur at gmail dot com>
-" Last Change: 20 July, 2010
+" Last Change: 22 July, 2010
 " Website:     http://github.com/dahu/VimLint
 "
 " See vimlint.txt for help.  This can be accessed by doing:
@@ -14,9 +14,17 @@
 "
 " Licensed under the same terms as Vim itself.
 " ============================================================================
-let s:VimLint_version = '0.0.4'  " alpha, unreleased
+let s:VimLint_version = '0.0.5'  " alpha, unreleased
 
 " History:{{{1
+" v.0.0.5 changes:
+" * replaced awful 'redirect to temporary file and run ex commands' with the
+"   approach of redirecting to a register and using vimscript. (thanks,
+"   godlygeek)
+" * replaced method of collecting All Options by using :help option-list
+"   (thanks, jamessan)
+" * fixed a bug that assumed 'hidden' was enabled. (thanks, Raimondi)
+"
 " v.0.0.4 changes:
 " * check &runtimepath for sane entries
 " * show the current   :filetype   settings in the vimlint report
@@ -43,7 +51,7 @@ let s:VimLint_version = '0.0.4'  " alpha, unreleased
 " TODO / Issues:{{{1
 "
 " [Features]
-" * dump :scriptnames to a tempfile and parse it for 'bad scripts', adding !!
+" * dump :scriptnames to a register and parse it for 'bad scripts', adding !!
 "   and ! as appropriate.
 " * add lots more help in the doc/vimlint.txt file explaining *why* these
 "   recommendations are made.
@@ -58,8 +66,6 @@ let s:VimLint_version = '0.0.4'  " alpha, unreleased
 "
 " [Code Style]
 " * see the various TODO's throughout
-" * With respect to DRYing the temporary redirections, I possibly don't have
-"   the edges quite right yet. What goes on what side of the line?
 
 " allow line continuation
 let s:old_cpo = &cpo
@@ -184,6 +190,7 @@ let s:chk_env_vars = {
 
 " Private Functions: {{{1
 
+let s:vl_pass_status = '   '
 let s:vl_fail_status = '!! '
 let s:vl_warn_status = '!  '
 
@@ -199,29 +206,29 @@ function! s:VL_Expand(var_type, var_name)
   return val
 endfunction
 
-" helper wrapper for temporarily redirecting output to a tempfile for
+" helper function to trim leading whitespace from strings
+function! s:VL_TrimLeft(string)
+  return substitute(a:string, '^\_.\{-}\(\w\)', '\1', '')
+endfunction
+
+" helper wrapper for temporarily redirecting output to the 'a' register for
 " capturing info.
-" NOTE: The argument, a:processing, is a function containing ex commands for
-" post-processing the output of a Vim command.
-" Example: call s:VL_RedirectWith('s:VL_ProcessAllVimOptions()')
+" Example: call s:VL_Execute('filetype')
 " NOTE: This re-sets redirection and resets it back to the Vim Report afterwards.
-function! s:VL_RedirectWith(command, processing)
-  let tempfilename = tempname()
-  exe "redir > " . tempfilename
-  "silent set all
+function! s:VL_Execute(command)
+  let save_reg = @a
+  redir @a
   exe a:command
   redir END
-  exe "edit " . tempfilename
-  exe "call " . a:processing
-  "write
-  "source %
-  "bdelete
   exe "redir >> " . s:vimlintreport
+  let ret_val = @a
+  let @a = save_reg
+  return ret_val
 endfunction
 
 function! s:VL_CheckVimVersion()
   if v:version < 700
-    silent echo "!! NOT Running Vim 7!"
+    silent echo s:vl_fail_status . " NOT Running Vim 7!"
   endif
 
   echo "\n== Version =="
@@ -231,14 +238,14 @@ endfunction
 " Check a set of 'fail' and then 'warn' expressions, short-circuiting at the
 " first successful failure.
 function! s:VL_EvaluateExpressions(var_inf)
-  let status = '   '
+  let status = s:vl_pass_status
   for check_type in ['fail', 'warn']
     exe "let trigger_status = s:vl_" . check_type . "_status"
     let check_expr = check_type . '-expr'
     if has_key(a:var_inf, check_expr)
       for expr in a:var_inf[check_expr]
         exe "if " . expr . " | let status = '" . trigger_status . "' | endif"
-        if status =~ '!' | break | endif
+        if status !~ s:vl_pass_status | break | endif
       endfor
     endif
   endfor
@@ -246,7 +253,7 @@ function! s:VL_EvaluateExpressions(var_inf)
 endfunction
 
 function! s:VL_FailReason(status, reason)
-  return (a:status =~ '!') ? "		" . escape(a:reason, "'\"") : ''
+  return (a:status !~ s:vl_pass_status ) ? "		" . escape(a:reason, "'\"") : ''
 endfunction
 
 " Complain if the environment variable doesn't match the vim variable
@@ -274,7 +281,7 @@ function! s:VL_CheckEnvironmentVars()
     for var_inf in var_inf_list
       let status = s:VL_EvaluateExpressions(var_inf)
       let reason = has_key(var_inf, 'reason') ? s:VL_FailReason(status, var_inf['reason']) : ''
-      if status =~ '!' | break | endif
+      if status !~ s:vl_pass_status | break | endif
     endfor
     exe "echo \"" . status . env_var . "=" . env_val . reason . "\""
   endfor
@@ -290,7 +297,7 @@ function! s:VL_CheckVimrc()
       " the $MYVIMRC variable when it finds and loads a personal vimrc, so for
       " it to be set but missing on disk would mean that it was deleted/moved
       " since starting Vim.
-      echo "!! Your personal vimrc file (" . vimrc . ") doesn't exist!"
+      echo s:vl_fail_status . " Your personal vimrc file (" . vimrc . ") doesn't exist!"
     endif
   else
     " Although the two variants (.vimrc and _vimrc) are actually tolerated on
@@ -300,9 +307,9 @@ function! s:VL_CheckVimrc()
     elseif has('unix') || has('macunix')
       let platform_vimrc = '$HOME/.vimrc'
     else
-      echo "! Can't detect what operating system you're using. Kindly let the developer know your OS, thanks. :)"
+      echo s:vl_warn_status . " Can't detect what operating system you're using. Kindly let the developer know your OS, thanks. :)"
     endif
-    echo "!! You don't have a personal vimrc file! You really should create a '" . platform_vimrc . "' file."
+    echo s:vl_fail_status . " You don't have a personal vimrc file! You really should create a '" . platform_vimrc . "' file."
   endif
 endfunction
 
@@ -311,10 +318,10 @@ function! s:VL_CheckVimRuntimePath()
   " TODO: I have the feeling that DRYing the next two checks would be more
   " hassle than it's worth, and more verbose than this simple but ugly way.
   if finddir($VIM, &rtp) == ''
-    echo "!! $VIM is not in your runtimepath! " . s:E('critical_error')
+    echo s:vl_fail_status . " $VIM is not in your runtimepath! " . s:E('critical_error')
   endif
   if finddir($VIMRUNTIME, &rtp) == ''
-    echo "!! $VIMRUNTIME is not in your runtimepath! " . s:E('critical_error')
+    echo s:vl_fail_status . " $VIMRUNTIME is not in your runtimepath! " . s:E('critical_error')
   endif
   let started_afters = 0
   for v_dir in split(&runtimepath, '\\\@<!,')
@@ -322,37 +329,28 @@ function! s:VL_CheckVimRuntimePath()
       let started_afters = 1
     else
       if started_afters
-        echo "!! Must not have normal directories following '/after' directories in runtimepath: " . v_dir
+        echo s:vl_fail_status . " Must not have normal directories following '/after' directories in runtimepath: " . v_dir
       endif
       if isdirectory(v_dir . "/after") && finddir(v_dir . "/after", &rtp) == ''
         " TODO: this seems clumsy... What is the alternative? Is there a way
         " for printf() to repeat the final argument if not enough are supplied...?
-        echo "!! " . s:E('after_dir_missing', v_dir, v_dir)
+        echo s:vl_fail_status . s:E('after_dir_missing', v_dir, v_dir)
       endif
     endif
   endfor
 endfunction
 
-" set of ex commands to massage the ':filetype' output
-function! s:VL_ProcessFiletypeSettings()
-  let g:VL_filetype_has_off = 0
-  normal "2dd"
-  let g:VL_filetype_line = getline('.')
-  if g:VL_filetype_line =~? 'off'
-    let g:VL_filetype_has_off = 1
-  endif
-endfunction
-
+" look for and warn about /off/i within :filetype output
 function! s:VL_CheckFiletypeSettings()
   echo "\n== Filetype Settings ==\n"
-  let status = '   '
+  let ft = s:VL_TrimLeft(s:VL_Execute('filetype'))
+  let status = s:vl_pass_status
   let help = ''
-  call s:VL_RedirectWith('filetype', 's:VL_ProcessFiletypeSettings()')
-  if g:VL_filetype_has_off
-    let status = '!! '
+  if match(ft, '\coff') != -1
+    let status = s:vl_fail_status
     let help = s:E('help', 'filetype')
   endif
-  echo status . g:VL_filetype_line . help
+  echo status . ft . help
 endfunction
 
 " checks important vim options
@@ -380,36 +378,25 @@ function! s:VL_CheckScripts()
   endif
 endfunction
 
-" set of ex commands to convert the ':set all' output into an array of option
-" names
-" TODO: I fear there has to be a better way to do all this...
-function! s:VL_ProcessAllVimOptions()
-  1
-  s/\_.\{-}\_^--- Options ---$//
-  .,/^  backspace/s/ \+/\r/g
-  .,$s/^ \+//
-  g/^\s*$/d
-  %s/^no//
-  %s/=.*/',/
-  %sort
-  %s/\([^,]\)$/\1',/
-  %s/^/  \\  '/
-  $
-  s/,/]/
-  1
-  normal Olet g:VL_all_options = [
-  write
-  source %
-  bdelete
-endfunction
-
 function! s:VL_CheckAllOptions()
+  let save_reg = @@
+  call s:VL_Execute("help option-list | .,/^---/y | close")
+  " wrap all options in '' and separate with commas  
+  " strip leading guff and open the array  
+  " strip trailing guff and close the array
+  exe "let g:VL_all_options = " . substitute(substitute(substitute(@@,
+        \ '\(''\w\+''\).\{-}\n', '\1,', 'g'),
+        \ '^.\{-}''', '[''', ''),            
+        \ ',----*', ']', '')                 
   echo "\n== All Settings ==\n"
   echo "--- Options ---"
-  call s:VL_RedirectWith('set all', 's:VL_ProcessAllVimOptions()')
   for v_opt in g:VL_all_options
-    silent exe "verbose set " . v_opt . "?"
+    try
+      silent exe "verbose set " . v_opt . "?"
+    catch
+    endtry
   endfor
+  let @@ = save_reg
 endfunction
 
 function! s:VL_CheckTermOptions()
@@ -419,11 +406,11 @@ endfunction
 
 function! s:VL_CollectData()
   call s:VL_CheckVimVersion()
-  call s:VL_CheckEnvironmentVars()
-  call s:VL_CheckVimrc()
-  call s:VL_CheckVimRuntimePath()
-  call s:VL_CheckFiletypeSettings()
   call s:VL_CheckEssentialOptions()
+  call s:VL_CheckEnvironmentVars()
+  call s:VL_CheckVimRuntimePath()
+  call s:VL_CheckVimrc()
+  call s:VL_CheckFiletypeSettings()
   call s:VL_CheckScripts()
   call s:VL_CheckAllOptions()
   call s:VL_CheckTermOptions()
@@ -466,7 +453,7 @@ let &cpo = s:old_cpo
 
 " Credits:{{{1
 "
-" Thanks to godlygeek, jamessan and spiiph for contributing ideas,
+" Thanks to godlygeek, jamessan, spiiph and Raimondi for contributing ideas,
 " suggestions, algorithms and corrections.
 "
 " vim: set sw=2 sts=2 et fdm=marker:
