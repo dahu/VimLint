@@ -14,9 +14,12 @@
 "
 " Licensed under the same terms as Vim itself.
 " ============================================================================
-let s:VimLint_version = '0.0.5'  " alpha, unreleased
+let s:VimLint_version = '0.0.6'  " alpha, unreleased
 
 " History:{{{1
+" v.0.0.6 changes:
+" * replaced 'redirect to register' approach with 'redirect to variable'
+"   (thanks, spiiph)
 " v.0.0.5 changes:
 " * replaced awful 'redirect to temporary file and run ex commands' with the
 "   approach of redirecting to a register and using vimscript. (thanks,
@@ -95,6 +98,10 @@ endfunction
 " Essential Options: {{{1
 let indent_reason = ''
 let s:chk_opt = {
+      \  'binary' : {
+      \    'reason' : "Should only ever be used when editing binary files.",
+      \    'fail-expr' : ['&binary == 1']
+      \  },
       \  'cindent' : {
       \    'reason' : s:E('indent_reason'),
       \    'fail-expr' : ['&cindent == 1']
@@ -211,18 +218,16 @@ function! s:VL_TrimLeft(string)
   return substitute(a:string, '^\_.\{-}\(\w\)', '\1', '')
 endfunction
 
-" helper wrapper for temporarily redirecting output to the 'a' register for
+" helper wrapper for temporarily redirecting output to a local variable for
 " capturing info.
 " Example: call s:VL_Execute('filetype')
 " NOTE: This re-sets redirection and resets it back to the Vim Report afterwards.
 function! s:VL_Execute(command)
-  let save_reg = @a
-  redir @a
+  let ret_val = ''
+  redir => ret_val
   exe a:command
   redir END
   exe "redir >> " . s:vimlintreport
-  let ret_val = @a
-  let @a = save_reg
   return ret_val
 endfunction
 
