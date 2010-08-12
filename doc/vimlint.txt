@@ -15,7 +15,7 @@ the situation.
 
 To run Vim Lint, use the command:
 >
-	:VimLint
+    :VimLint
 <
 
 This will create a |vimlint-report| in your temp directory and open it
@@ -23,6 +23,13 @@ in your current vim session for you to read.
 
 VIM LINT REPORT                                           *vimlint-report*
 
+The VimLint report shows the collected information about your Vim setup with
+warnings and errors highlighted and marked with leading ! and !! characters
+respectively. Warnings are shown in red on white background, whereas Errors
+are shown in white on red background. To search for warnings and errors, use:
+>
+    /^!
+<
 The report is divided into the following sections:
 
 - Version Information	Showing what version of Vim you are using and
@@ -32,14 +39,23 @@ The report is divided into the following sections:
 			should upgrade to a more complete version if
 			possible. See |:version| for more details.
 
-- Environment Variables	Showing the value of several important
-  			environment variables that Vim uses.
-
 - Essential Vim Options	Showing the most important Vim options. These
 			options affect security, vi compatibility,
 			standard Vim behaviour and interoperability.
 			See |options.txt| and the |:options| command
 			for more details.
+
+- Environment Variables	Showing the value of several important
+  			environment variables that Vim uses.
+
+- Filetype Settings     Showing which of Vim's filetype detection, filetype
+                        plugin and filetype indentation settings are
+                        activated. In general, you will probably want all
+                        three of these ON. To do that, add the following line
+                        to your ~/.vimrc:
+>
+                           filetype plugin indent on
+<
 
 - Loaded Scripts	Showing all of the script files from builtins
 			and plugins that were loaded in this Vim

@@ -5,7 +5,7 @@ reasons why they're considered bad and suggestions on how to improve them.
 
 == Quick Start
 
-Once installed, run Vim Lint by doing:
+Once installed, run VimLint by doing:
 
   :VimLint
 
@@ -24,4 +24,6 @@ http://wiki.github.com/dahu/VimLint/
 === Source Code:
 
 http://github.com/dahu/VimLint
+
+Now also available through Marc Weber's vim-addon-manager: http://www.vim.org/scripts/script.php?script_id=2905
 
